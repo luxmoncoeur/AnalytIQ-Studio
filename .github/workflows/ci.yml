@@ -1,0 +1,79 @@
+name: CI
+
+# Uses the reusable workflows from luxmoncoeur/ci-cd-template, pinned to a commit SHA (v1.0.1).
+#
+#   pull_request:  checks (lint · test · build) + release-preview (PR title check + "would release vX.Y.Z")
+#                  ──> ci (the one required check)
+#   push to main:  checks ──> ci ──> release (version, CHANGELOG.md, tag, GitHub Release)
+#
+# Releases depend on squash merging with the PR title as the commit message
+# (Settings → General → Pull Requests). PR titles must be Conventional Commits: feat: …, fix: …, docs: …
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # `edited` re-runs the title check when a PR is renamed.
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+# A newer push to a PR cancels its outdated run. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: luxmoncoeur/ci-cd-template/.github/workflows/ci-reusable.yml@e191094d8a9a55b80b97188de599353a9a71d171 # v1.0.1
+    with:
+      node-version: "22"
+      package-manager: npm
+      run-typecheck: false # plain JavaScript, no tsc
+
+  release-preview:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write # the preview comment
+    uses: luxmoncoeur/ci-cd-template/.github/workflows/release-reusable.yml@e191094d8a9a55b80b97188de599353a9a71d171 # v1.0.1
+    with:
+      dry-run: true
+
+  # The only check branch protection needs. Fails if `checks` didn't pass or anything failed/cancelled.
+  ci:
+    needs: [checks, release-preview]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: All checks passed?
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          CHECKS: ${{ needs.checks.result }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$NEEDS" | jq '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled")] | length')
+          if [ "$CHECKS" != "success" ] || [ "$bad" != "0" ]; then
+            echo "::error title=CI failed::One or more required jobs did not succeed."
+            exit 1
+          fi
+
+  # Checks needs.ci.result directly: release-preview is always skipped on pushes, and the implicit
+  # success() would skip this job because of it.
+  release:
+    needs: [ci]
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write # release commit, tag, GitHub Release
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    uses: luxmoncoeur/ci-cd-template/.github/workflows/release-reusable.yml@e191094d8a9a55b80b97188de599353a9a71d171 # v1.0.1
+    secrets:
+      deploy-key: ${{ secrets.RELEASE_DEPLOY_KEY }} # optional, only if main is protected
