@@ -41,7 +41,12 @@ function importText(text, layout, onLoad) {
   return null;
 }
 
-export function PastePanel({ onLoad }) {
+/**
+ * Paste box. Regression passes `onLoad(xs, ys, labels)`; other pages pass
+ * `onImport(text)`, which loads the data and returns an error message or null,
+ * plus their own `placeholder` and `hint` (the X/Y layout picker is then hidden).
+ */
+export function PastePanel({ onLoad, onImport, placeholder, hint }) {
   const id = useId();
   const [text, setText] = useState("");
   const [layout, setLayout] = useState("auto");
@@ -59,6 +64,7 @@ export function PastePanel({ onLoad }) {
         rows={8}
         spellCheck={false}
         placeholder={
+          placeholder ??
           "Hours\tScore\n2\t62\n3\t65\n5\t70\n\nor two rows:\nX: 1 2 3 4 5\nY: 2 4 5 4 5"
         }
         className="rounded-md font-mono text-xs sm:text-sm"
@@ -66,31 +72,33 @@ export function PastePanel({ onLoad }) {
         aria-invalid={error ? true : undefined}
       />
       <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-        Separate values with tabs, commas, semicolons or spaces. Use a period for decimals (2.5). A
-        header row is detected automatically.
+        {hint ??
+          "Separate values with tabs, commas, semicolons or spaces. Use a period for decimals (2.5). A header row is detected automatically."}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Select value={layout} onValueChange={setLayout}>
-          <SelectTrigger
-            size="sm"
-            className="h-8 rounded-md text-xs sm:w-64"
-            aria-label="Data layout"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {LAYOUTS.map((option) => (
-              <SelectItem key={option.value} value={option.value} className="text-xs">
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {onImport ? null : (
+          <Select value={layout} onValueChange={setLayout}>
+            <SelectTrigger
+              size="sm"
+              className="h-8 rounded-md text-xs sm:w-64"
+              aria-label="Data layout"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LAYOUTS.map((option) => (
+                <SelectItem key={option.value} value={option.value} className="text-xs">
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Button
           size="sm"
           className="h-8 rounded-md text-xs sm:ml-auto"
           disabled={text.trim() === ""}
-          onClick={() => setError(importText(text, layout, onLoad))}
+          onClick={() => setError(onImport ? onImport(text) : importText(text, layout, onLoad))}
         >
           Use this data
         </Button>
@@ -104,7 +112,8 @@ export function PastePanel({ onLoad }) {
   );
 }
 
-export function UploadPanel({ onLoad }) {
+/** CSV upload. Same `onLoad` / `onImport` contract as PastePanel. */
+export function UploadPanel({ onLoad, onImport, hint }) {
   const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [error, setError] = useState(/** @type {string | null} */ (null));
   const [fileName, setFileName] = useState("");
@@ -117,7 +126,8 @@ export function UploadPanel({ onLoad }) {
       setError("The file is larger than 2 MB. Use a smaller file.");
       return;
     }
-    setError(importText(await file.text(), "columns", onLoad));
+    const text = await file.text();
+    setError(onImport ? onImport(text) : importText(text, "columns", onLoad));
   };
 
   return (
@@ -144,7 +154,8 @@ export function UploadPanel({ onLoad }) {
           Drop a CSV file here or click to browse
         </span>
         <span className="text-[11px] text-muted-foreground">
-          First column = X, second column = Y. A header row is optional. .csv or .txt, up to 2 MB.
+          {hint ?? "First column = X, second column = Y."} A header row is optional. .csv or .txt,
+          up to 2 MB.
         </span>
       </button>
       <input

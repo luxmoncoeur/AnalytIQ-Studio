@@ -5,10 +5,38 @@ import { Area, CartesianGrid, ComposedChart, ReferenceLine, XAxis, YAxis } from 
 import { useSettings } from "@/components/providers";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { formatNumber, formatPValue } from "@/lib/format";
-import { normalCdf, normalPdf } from "@/lib/stats";
+import { normalCdf, normalPdf, tCdf, tPdf } from "@/lib/stats";
 
 const SAMPLES = 320;
 const MAX_HALF_WIDTH = 6;
+/** t with few degrees of freedom has heavy tails and large critical values. */
+const MAX_HALF_WIDTH_T = 14;
+
+/**
+ * Density, CDF and labels for the statistic's distribution under H₀.
+ * @param {{ symbol?: 'z' | 't', df?: number | null }} result
+ */
+export function distributionOf(result) {
+  if (result.symbol === "t" && typeof result.df === "number") {
+    const df = result.df;
+    return {
+      symbol: "t",
+      variable: "T",
+      pdf: (/** @type {number} */ x) => tPdf(x, df),
+      cdf: (/** @type {number} */ x) => tCdf(x, df),
+      name: `t distribution curve (df = ${formatNumber(df, 2)})`,
+      maxHalfWidth: MAX_HALF_WIDTH_T,
+    };
+  }
+  return {
+    symbol: "z",
+    variable: "Z",
+    pdf: normalPdf,
+    cdf: normalCdf,
+    name: "Standard normal curve",
+    maxHalfWidth: MAX_HALF_WIDTH,
+  };
+}
 
 /**
  * @param {number} x
@@ -39,7 +67,7 @@ function asExtreme(x, tail, z) {
  * Build the curve: dense samples plus the exact critical values and z so every
  * shaded region starts exactly at its boundary.
  */
-export function buildCurve(tail, critical, z, halfWidth) {
+export function buildCurve(tail, critical, z, halfWidth, pdf = normalPdf) {
   const boundaries = [critical.lower, critical.upper, z, -z].filter(
     (v) => v !== null && Math.abs(v) <= halfWidth,
   );
@@ -49,7 +77,7 @@ export function buildCurve(tail, critical, z, halfWidth) {
   );
   const all = [...new Set([...xs, ...boundaries])].sort((a, b) => a - b);
   return all.map((x) => {
-    const density = normalPdf(x);
+    const density = pdf(x);
     const onBoundary = boundaries.includes(x);
     const reject = inRejection(x, tail, critical);
     return {
@@ -65,41 +93,59 @@ export function buildCurve(tail, critical, z, halfWidth) {
   });
 }
 
-function CurveTooltip({ active, payload, decimals }) {
+function CurveTooltip({ active, payload, decimals, dist }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
   return (
     <div className="grid gap-1 rounded-lg border bg-popover px-3 py-2 font-mono text-xs tabular-nums shadow-xl">
-      <p>z = {formatNumber(point.x, 2, { fixed: true })}</p>
-      <p className="text-muted-foreground">
-        P(Z ≤ z) = {formatNumber(normalCdf(point.x), decimals, { fixed: true })}
+      <p>
+        {dist.symbol} = {formatNumber(point.x, 2, { fixed: true })}
       </p>
       <p className="text-muted-foreground">
-        P(Z ≥ z) = {formatNumber(normalCdf(-point.x), decimals, { fixed: true })}
+        P({dist.variable} ≤ {dist.symbol}) ={" "}
+        {formatNumber(dist.cdf(point.x), decimals, { fixed: true })}
+      </p>
+      <p className="text-muted-foreground">
+        P({dist.variable} ≥ {dist.symbol}) ={" "}
+        {formatNumber(dist.cdf(-point.x), decimals, { fixed: true })}
       </p>
     </div>
   );
 }
 
 /**
- * Standard normal curve with the rejection region(s) for α, the acceptance
- * region, the critical value(s), the observed z and (optionally) the p-value area.
- * @param {{ result: import('@/lib/stats/ztest').ZTestResult, showPValue: boolean }} props
+ * Standard normal (or t) curve with the rejection region(s) for α, the acceptance
+ * region, the critical value(s), the observed statistic and (optionally) the p-value area.
+ * @param {{ result: import('@/lib/stats/decision').TestResult, showPValue: boolean }} props
  */
 export function NormalCurveChart({ result, showPValue }) {
   const { decimals } = useSettings();
-  const { tail, critical, z, alpha } = result;
+  const { tail, critical, statistic: z, alpha } = result;
+  const dist = distributionOf(result);
+  const s = dist.symbol;
   const zc = /** @type {number} */ (tail === "left" ? critical.lower : critical.upper);
   const halfWidth = Math.min(
-    MAX_HALF_WIDTH,
+    dist.maxHalfWidth,
     Math.max(4, Math.ceil(Math.abs(z) + 0.6), Math.ceil(Math.abs(zc) + 0.6)),
   );
   const offChart = Math.abs(z) > halfWidth;
   const data = useMemo(
-    () => buildCurve(tail, critical, z, halfWidth),
-    [tail, critical, z, halfWidth],
+    () =>
+      buildCurve(
+        tail,
+        critical,
+        z,
+        halfWidth,
+        distributionOf({ symbol: result.symbol, df: result.df }).pdf,
+      ),
+    [tail, critical, z, halfWidth, result.symbol, result.df],
   );
-  const ticks = Array.from({ length: 2 * halfWidth + 1 }, (_, i) => i - halfWidth);
+  const tickStep = halfWidth > 8 ? 2 : 1;
+  const ticks = Array.from(
+    { length: Math.floor((2 * halfWidth) / tickStep) + 1 },
+    (_, i) => -halfWidth + i * tickStep,
+  );
+  const criticalOffChart = Math.abs(zc) > halfWidth;
   const markerX = offChart ? Math.sign(z) * halfWidth : z;
 
   const config = {
@@ -160,11 +206,11 @@ export function NormalCurveChart({ result, showPValue }) {
         config={config}
         className="aspect-auto h-[280px] w-full sm:h-[340px]"
         role="img"
-        aria-label={`Standard normal curve. ${
+        aria-label={`${dist.name}. ${
           tail === "two"
             ? `Rejection regions below ${criticalLabel(-zc)} and above ${criticalLabel(zc)}`
             : `Rejection region ${tail === "right" ? "above" : "below"} ${criticalLabel(zc)}`
-        }. The test statistic z = ${formatNumber(z, decimals)} ${result.reject ? "falls in the rejection region" : "falls in the acceptance region"}.`}
+        }. The test statistic ${s} = ${formatNumber(z, decimals)} ${result.reject ? "falls in the rejection region" : "falls in the acceptance region"}.`}
       >
         <ComposedChart data={data} margin={{ top: 28, right: 12, bottom: 22, left: 12 }}>
           <defs>
@@ -189,7 +235,7 @@ export function NormalCurveChart({ result, showPValue }) {
             tickMargin={8}
             allowDataOverflow
             label={{
-              value: "z",
+              value: s,
               position: "insideBottom",
               offset: -14,
               className: "fill-muted-foreground font-mono text-xs",
@@ -215,7 +261,7 @@ export function NormalCurveChart({ result, showPValue }) {
           ))}
           <ChartTooltip
             cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
-            content={<CurveTooltip decimals={decimals} />}
+            content={<CurveTooltip decimals={decimals} dist={dist} />}
           />
           <Area
             dataKey="accept"
@@ -283,7 +329,7 @@ export function NormalCurveChart({ result, showPValue }) {
             className="pointer-events-none"
             style={{ pointerEvents: "none" }}
             label={{
-              value: `z = ${formatNumber(z, Math.min(decimals, 4), { fixed: true })}${offChart ? (z > 0 ? " →" : " ←") : ""}`,
+              value: `${s} = ${formatNumber(z, Math.min(decimals, 4), { fixed: true })}${offChart ? (z > 0 ? " →" : " ←") : ""}`,
               // Inside the plot, one row below the critical-value labels, so the two never collide.
               position:
                 Math.abs(markerX) > halfWidth - 1.2
@@ -311,7 +357,7 @@ export function NormalCurveChart({ result, showPValue }) {
           Critical value
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-3 w-0.5 bg-primary" aria-hidden="true" /> Observed z
+          <span className="h-3 w-0.5 bg-primary" aria-hidden="true" /> Observed {s}
         </span>
         {showPValue ? (
           <span className="flex items-center gap-1.5">
@@ -323,7 +369,15 @@ export function NormalCurveChart({ result, showPValue }) {
           </span>
         ) : null}
         {offChart ? (
-          <span>z is beyond ±{halfWidth}, so its marker is pinned to the edge.</span>
+          <span>
+            {s} is beyond ±{halfWidth}, so its marker is pinned to the edge.
+          </span>
+        ) : null}
+        {criticalOffChart ? (
+          <span>
+            The critical value ({criticalLabel(zc)}) is beyond ±{halfWidth}; the rejection region
+            lies off the chart.
+          </span>
         ) : null}
       </figcaption>
     </figure>

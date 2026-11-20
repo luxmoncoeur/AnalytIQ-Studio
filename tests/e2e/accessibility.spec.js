@@ -23,6 +23,13 @@ const PAGES = [
       await page.getByRole("button", { name: "Compute" }).click();
     },
   },
+  {
+    path: "/t-test",
+    name: "t-test with results",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Load example" }).click();
+    },
+  },
   { path: "/learn", name: "learn" },
   { path: "/about", name: "about" },
 ];

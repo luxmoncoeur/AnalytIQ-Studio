@@ -201,3 +201,63 @@ function parseColumns(lines) {
     : [];
   return { ok: true, value: { xs, ys, warnings, header, layout: "columns" } };
 }
+
+/**
+ * @typedef {{ ok: true, value: { samples: number[][], header: string[] | null } } | { ok: false, error: { message: string, line?: number } }} SamplesResult
+ */
+
+/**
+ * Parse pasted text or CSV content into `count` independent columns (samples).
+ * Columns may have different lengths: empty cells are skipped, so
+ * "12,15\n14,\n" gives [[12, 14], [15]]. With count = 1, a single line of
+ * values ("12 14 15") is also accepted. An optional header row is detected.
+ *
+ * @param {string} text
+ * @param {number} count  Number of columns to read (extra columns are ignored with a warning-free skip).
+ * @returns {SamplesResult}
+ */
+export function parseSamples(text, count) {
+  const delimiter = detectDelimiter(text);
+  let lines = text
+    .split(/\r\n|\r|\n/)
+    .map((line, index) => ({ number: index + 1, parts: splitLine(line, delimiter) }))
+    .filter((entry) => entry.parts.some((part) => part !== ""));
+  if (lines.length === 0)
+    return { ok: false, error: { message: "No data found. Paste a column of numbers." } };
+  // One sample typed across a single line: treat every value as a row.
+  if (count === 1 && lines.length === 1 && lines[0].parts.length > 1) {
+    const [only] = lines;
+    lines = only.parts.map((part) => ({ number: only.number, parts: [part] }));
+  }
+
+  /** @type {string[] | null} */
+  let header = null;
+  const first = lines[0].parts.slice(0, count);
+  if (first.every((part) => part === "" || parseNumber(part) === null)) {
+    header = first;
+    lines = lines.slice(1);
+  }
+
+  /** @type {number[][]} */
+  const samples = Array.from({ length: count }, () => []);
+  for (const entry of lines) {
+    for (let column = 0; column < count; column += 1) {
+      const part = entry.parts[column] ?? "";
+      if (part === "") continue;
+      const value = parseNumber(part);
+      if (value === null) {
+        return {
+          ok: false,
+          error: {
+            message: `Line ${entry.number}: "${part}" is not a valid number. ${NOT_A_NUMBER_HINT}`,
+            line: entry.number,
+          },
+        };
+      }
+      samples[column].push(value);
+    }
+  }
+  if (samples.every((sample) => sample.length === 0))
+    return { ok: false, error: { message: "Only a header row was found. Add data below it." } };
+  return { ok: true, value: { samples, header } };
+}

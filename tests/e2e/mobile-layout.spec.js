@@ -1,12 +1,21 @@
 import { expect, test } from "@playwright/test";
 
-const PATHS = ["/", "/dashboard", "/regression", "/regression?example=study-hours", "/hypothesis", "/learn", "/about"];
+const PATHS = [
+  "/",
+  "/dashboard",
+  "/regression",
+  "/regression?example=study-hours",
+  "/hypothesis",
+  "/t-test",
+  "/learn",
+  "/about",
+];
 
 /** Width of the page content beyond the screen, in CSS pixels (0 = no sideways scrolling). */
 const overflow = (page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-for (const width of [320, 375]) {
+for (const width of [320, 360, 375]) {
   test.describe(`Phone layout at ${width} px`, () => {
     test.use({ viewport: { width, height: 800 } });
 
@@ -24,6 +33,14 @@ for (const width of [320, 375]) {
       await expect(table).toBeVisible();
       await expect.poll(() => overflow(page)).toBeLessThanOrEqual(0);
       expect(await table.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    });
+
+    test("t-test results do not scroll sideways", async ({ page }) => {
+      await page.goto("/t-test");
+      await page.getByRole("radio", { name: /Two samples/ }).click();
+      await page.getByRole("button", { name: "Load example" }).click();
+      await expect(page.getByRole("heading", { name: "Reject H₀" })).toBeVisible();
+      await expect.poll(() => overflow(page)).toBeLessThanOrEqual(0);
     });
 
     test("opening the theme menu does not shift the page", async ({ page }) => {

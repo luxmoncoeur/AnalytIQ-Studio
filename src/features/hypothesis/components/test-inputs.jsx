@@ -25,17 +25,27 @@ const ALPHA_TOOLTIPS = {
   custom: "Specify a custom significance level (0 < α ≤ 0.5)",
 };
 
-/** Compact selector for the four z-tests (radio group): one row on desktop, 2 × 2 on phones. */
-export function TestPicker({ value, onChange }) {
+/**
+ * Compact test selector (radio group). Defaults to the four z-tests: one row on
+ * desktop, 2 × 2 on phones. Other pages pass their own `tests`, `order` and `label`.
+ */
+export function TestPicker({
+  value,
+  onChange,
+  tests = TESTS,
+  order = TEST_ORDER,
+  label = "Type of z-test",
+  className = "grid-cols-2 lg:grid-cols-4",
+}) {
   return (
     <RadioGroup
       value={value}
       onValueChange={onChange}
-      className="grid grid-cols-2 gap-2 lg:grid-cols-4"
-      aria-label="Type of z-test"
+      className={cn("grid gap-2", className)}
+      aria-label={label}
     >
-      {TEST_ORDER.map((id) => {
-        const test = TESTS[id];
+      {order.map((id) => {
+        const test = tests[id];
         const active = id === value;
         return (
           <label

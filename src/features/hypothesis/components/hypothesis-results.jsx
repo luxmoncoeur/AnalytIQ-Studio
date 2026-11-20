@@ -130,13 +130,13 @@ export function VerdictCard({ result, statements }) {
           </div>
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:min-w-[26rem]">
             <Stat
-              label="z statistic"
+              label={`${result.symbol} statistic`}
               tooltip="Standardized test score: number of standard errors the sample result is from the hypothesized mean"
             >
-              <AnimatedNumber value={result.z} decimals={decimals} />
+              <AnimatedNumber value={result.statistic} decimals={decimals} />
             </Stat>
             <Stat
-              label="Critical z"
+              label={`Critical ${result.symbol}`}
               tone="text-reject"
               tooltip="Cutoff boundary score(s) determined by α separating acceptance and rejection regions"
             >
@@ -189,9 +189,24 @@ export function VerdictCard({ result, statements }) {
   );
 }
 
-/** Curve, formal conclusion, z-table and worked solution. */
+/** "95% confidence interval for μ: (a, b)" or a one-sided bound, for t results. */
+export function ciText(result, decimals) {
+  const { ci, parameter } = result;
+  const level = `${Number((ci.level * 100).toPrecision(12))}%`;
+  const f = (x) => formatNumber(x, decimals, { fixed: true });
+  if (ci.lower !== null && ci.upper !== null)
+    return `${level} confidence interval for ${parameter}: (${f(ci.lower)}, ${f(ci.upper)})`;
+  return ci.lower !== null
+    ? `${level} one-sided confidence bound: ${parameter} > ${f(ci.lower)}`
+    : `${level} one-sided confidence bound: ${parameter} < ${f(ci.upper)}`;
+}
+
+/** Curve, formal conclusion, z-table (z-tests only) and worked solution. */
 export function ZTestDetails({ result, action = null }) {
+  const { decimals } = useSettings();
   const [showPValue, setShowPValue] = useState(true);
+  const s = result.symbol;
+  const isZ = s === "z";
   const zc = /** @type {number} */ (
     result.tail === "left" ? result.critical.lower : result.critical.upper
   );
@@ -212,7 +227,11 @@ export function ZTestDetails({ result, action = null }) {
       <Reveal>
         <Card className="gap-4 shadow-xs">
           <CardHeader>
-            <CardTitle>Where z falls on the normal curve</CardTitle>
+            <CardTitle>
+              {isZ
+                ? "Where z falls on the normal curve"
+                : `Where t falls on the t distribution (df = ${formatNumber(result.df, 2)})`}
+            </CardTitle>
             <CardDescription>
               Red tails are the rejection region (α). Hover the curve to read areas.
             </CardDescription>
@@ -229,7 +248,7 @@ export function ZTestDetails({ result, action = null }) {
                   }
                 />
                 <TooltipContent>
-                  Shade the tail probability corresponding to the observed test statistic z
+                  Shade the tail probability corresponding to the observed test statistic {s}
                 </TooltipContent>
               </Tooltip>
             </CardAction>
@@ -245,7 +264,9 @@ export function ZTestDetails({ result, action = null }) {
           <CardHeader>
             <CardTitle>Show the work</CardTitle>
             <CardDescription>
-              Formal conclusion, the step-by-step solution and the z-table lookup.
+              {isZ
+                ? "Formal conclusion, the step-by-step solution and the z-table lookup."
+                : "Formal conclusion, the confidence interval and the step-by-step solution."}
             </CardDescription>
             {action ? <CardAction>{action}</CardAction> : null}
           </CardHeader>
@@ -253,18 +274,25 @@ export function ZTestDetails({ result, action = null }) {
             <p className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-xs leading-relaxed font-medium text-foreground sm:text-sm">
               {result.conclusion}
             </p>
-            <Tabs defaultValue="steps">
-              <TabsList>
-                <TabsTrigger value="steps">Solution</TabsTrigger>
-                <TabsTrigger value="ztable">Z-table value</TabsTrigger>
-              </TabsList>
-              <TabsContent value="steps" className="pt-3">
-                <SolutionSteps steps={result.steps} />
-              </TabsContent>
-              <TabsContent value="ztable" className="pt-3">
-                <ZTableLookup alpha={result.alpha} tail={result.tail} critical={Math.abs(zc)} />
-              </TabsContent>
-            </Tabs>
+            {result.ci ? (
+              <p className="mb-4 font-mono text-xs sm:text-sm">{ciText(result, decimals)}</p>
+            ) : null}
+            {isZ ? (
+              <Tabs defaultValue="steps">
+                <TabsList>
+                  <TabsTrigger value="steps">Solution</TabsTrigger>
+                  <TabsTrigger value="ztable">Z-table value</TabsTrigger>
+                </TabsList>
+                <TabsContent value="steps" className="pt-3">
+                  <SolutionSteps steps={result.steps} />
+                </TabsContent>
+                <TabsContent value="ztable" className="pt-3">
+                  <ZTableLookup alpha={result.alpha} tail={result.tail} critical={Math.abs(zc)} />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <SolutionSteps steps={result.steps} />
+            )}
           </CardContent>
         </Card>
       </Reveal>

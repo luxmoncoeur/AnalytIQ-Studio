@@ -42,13 +42,14 @@ The app is built for learning. Results match standard statistical software, and 
 
 The app has five main pages:
 
-| Page               | What you can do                                                                  |
-| ------------------ | -------------------------------------------------------------------------------- |
-| Dashboard          | Preview a live regression fit and a Z-test sandbox using sample datasets         |
-| Linear Regression  | Enter paired data and get the regression line, r, R², charts, and predictions    |
-| Hypothesis Testing | Run one- and two-sample Z-tests for means and proportions                        |
-| Formulas & Z-Table | Look up every formula the app uses, the decision rules, and the standard Z-table |
-| About              | Read about the project and the BSIT-3A class that built it                       |
+| Page               | What you can do                                                                 |
+| ------------------ | ------------------------------------------------------------------------------- |
+| Dashboard          | Preview a live regression fit and a Z-test sandbox using sample datasets        |
+| Linear Regression  | Enter paired data and get the regression line, r, R², charts, and predictions   |
+| Hypothesis Testing | Run one- and two-sample Z-tests for means and proportions                       |
+| t-Tests            | One-sample, two-sample (Welch or pooled) and paired t-tests                     |
+| Formulas & Tables  | Look up every formula the app uses, the decision rules, and the Z- and t-tables |
+| About              | Read about the project and the BSIT-3A class that built it                      |
 
 ## Features
 
@@ -73,9 +74,17 @@ The app has five main pages:
 - **Normal curve chart.** Shows the rejection region and where your test statistic lands.
 - **Z-table lookup** and worked examples for each test.
 
+### t-Tests
+
+- **Three t-tests:** one sample, two independent samples (Welch's test by default, pooled variance as an option), and paired samples.
+- **Raw data or summary statistics.** Type values into a table, paste them, or upload a CSV, or enter the mean, standard deviation and n.
+- **Left-, right-, and two-tailed tests** at any significance level (α).
+- **Complete results.** The t statistic, degrees of freedom (Welch–Satterthwaite for Welch's test), critical value, p-value, confidence interval (a one-sided bound for one-tailed tests), the decision, and a plain-language explanation.
+- **t distribution chart** with the rejection region and the test statistic, and the full step-by-step solution with your numbers.
+
 ### Learn
 
-- A reference page with every formula the app uses, decision rules, a table of common critical values, and a full standard normal (Z) table.
+- A reference page with every formula the app uses, decision rules, a table of common critical values, a full standard normal (Z) table, and a t-table.
 
 ### Printable Reports
 
@@ -101,6 +110,7 @@ AnalytIQ-Studio/
 │   │       ├── dashboard/
 │   │       ├── regression/     # Linear regression
 │   │       ├── hypothesis/     # Hypothesis testing
+│   │       ├── t-test/         # t-tests
 │   │       ├── learn/          # Formulas & Z-table
 │   │       └── about/          # About the project and the team
 │   ├── components/
@@ -112,11 +122,12 @@ AnalytIQ-Studio/
 │   │   ├── dashboard/
 │   │   ├── regression/         # Data entry, charts, results, example datasets
 │   │   ├── hypothesis/         # Test inputs, normal curve, Z-table, explanations
+│   │   ├── ttest/              # t-test config, data entry and report
 │   │   ├── learn/
 │   │   └── about/              # Project info and team members
 │   ├── hooks/                  # Shared React hooks
 │   └── lib/
-│       ├── stats/              # Statistics engine (regression, Z-tests, normal distribution)
+│       ├── stats/              # Statistics engine (regression, Z- and t-tests, distributions)
 │       │   └── __tests__/      # Unit tests and reference fixtures
 │       ├── format.js           # Number formatting
 │       └── utils.js
