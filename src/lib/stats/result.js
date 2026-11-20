@@ -13,7 +13,9 @@
  *   | 'PROBABILITY_OUT_OF_RANGE'
  *   | 'SUCCESSES_OUT_OF_RANGE'
  *   | 'ZERO_STANDARD_ERROR'
- *   | 'INVALID_TAIL'} StatsErrorCode
+ *   | 'INVALID_TAIL'
+ *   | 'ZERO_VARIANCE'
+ *   | 'DF_INVALID'} StatsErrorCode
  */
 
 /**

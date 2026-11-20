@@ -67,7 +67,7 @@ export function ReportDialog({ title, subtitle, children }) {
           {children}
           <footer className="border-t pt-3 text-xs text-muted-foreground">
             Computed by AnalytIQ Studio at full precision; values shown rounded. Formulas are listed
-            on the Formulas &amp; Z-Table page.
+            on the Formulas &amp; Tables page.
           </footer>
         </article>
       </DialogContent>

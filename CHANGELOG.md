@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* **t-test:** one-sample, two-sample (Welch by default, pooled as an option) and paired t-tests from raw data or summary statistics, with df, critical value, p-value, confidence interval, t distribution chart, step-by-step solution and printable report
+* **stats:** Student's t distribution (CDF, survival function, density, quantiles) built on a regularized incomplete beta function, verified against SciPy for df from 1 to 10⁷
+* **learn:** t-test formulas and a t-table; the page is now "Formulas & Tables"
+
 ## 1.0.0 (2026-11-11)
 
 ### Features

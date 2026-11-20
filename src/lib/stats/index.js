@@ -22,5 +22,7 @@ export {
   twoProportionsZTest,
   TAIL_OPERATOR,
 } from "./ztest.js";
-export { parseNumber, parsePairs } from "./parse.js";
+export { tPdf, tCdf, tSf, tIsf, tInv, criticalT, tPValue } from "./distributions.js";
+export { oneSampleTTest, twoSampleTTest, pairedTTest } from "./ttest.js";
+export { parseNumber, parsePairs, parseSamples } from "./parse.js";
 export { compensatedSum } from "./summation.js";

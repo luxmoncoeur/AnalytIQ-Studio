@@ -170,7 +170,7 @@ export function Dashboard() {
           <Button asChild variant="outline" size="sm" className="h-8 rounded-md text-xs">
             <Link href="/learn">
               <BookOpenText className="size-3.5" aria-hidden="true" />
-              Formulas &amp; Z-Table
+              Formulas &amp; Tables
             </Link>
           </Button>
           <Button asChild size="sm" className="h-8 rounded-md text-xs">
