@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0](https://github.com/luxmoncoeur/AnalytIQ-Studio/compare/v1.0.0...v1.1.0) (2026-11-26)
+
+### Features
+
+* **t-test:** one-sample, Welch/pooled and paired t-tests ([#16](https://github.com/luxmoncoeur/AnalytIQ-Studio/issues/16)) ([c721573](https://github.com/luxmoncoeur/AnalytIQ-Studio/commit/c721573de1ee7abe5ba2352e0ee4dba3e551f2a9))
+
 ## Unreleased
 
 ### Features
