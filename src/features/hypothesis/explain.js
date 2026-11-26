@@ -6,6 +6,9 @@ const ESTIMATE_LABEL = {
   "one-proportion": "sample proportion p̂",
   "two-means": "observed difference x̄₁ − x̄₂",
   "two-proportions": "observed difference p̂₁ − p̂₂",
+  "one-sample": "sample mean x̄",
+  "two-sample": "observed difference x̄₁ − x̄₂",
+  paired: "mean difference d̄",
 };
 
 /**
@@ -19,14 +22,24 @@ export function percentText(p) {
 }
 
 /**
- * Plain-language explanation of a z-test result, for the at-a-glance verdict.
- * Every number comes from the result; nothing is recomputed.
+ * Plain-language explanation of a z- or t-test result, for the at-a-glance
+ * verdict. Every number comes from the result; nothing is recomputed.
  *
- * @param {import('@/lib/stats/ztest').ZTestResult} result
+ * @param {import('@/lib/stats/decision').TestResult} result
  * @param {number} decimals
  */
 export function explainResult(result, decimals) {
-  const { z, tail, alpha, pValue, reject, nullValue, estimate, hypotheses } = result;
+  const {
+    statistic: z,
+    symbol: s,
+    tail,
+    alpha,
+    pValue,
+    reject,
+    nullValue,
+    estimate,
+    hypotheses,
+  } = result;
   const zc = /** @type {number} */ (
     tail === "left" ? result.critical.lower : result.critical.upper
   );
@@ -45,11 +58,11 @@ export function explainResult(result, decimals) {
   const cutoffValue = formatNumber(zc, decimals, { fixed: true });
   const needed =
     tail === "two"
-      ? `To reject H₀ at α = ${alpha} (two-tailed), z had to be beyond ±${formatNumber(Math.abs(zc), decimals, { fixed: true })}`
+      ? `To reject H₀ at α = ${alpha} (two-tailed), ${s} had to be beyond ±${formatNumber(Math.abs(zc), decimals, { fixed: true })}`
       : tail === "right"
-        ? `To reject H₀ at α = ${alpha} (right-tailed), z had to be at least ${cutoffValue}`
-        : `To reject H₀ at α = ${alpha} (left-tailed), z had to be at most ${cutoffValue}`;
-  const cutoff = `${needed}. ${reject ? "It is, so z lands in the rejection region." : "It is not, so z stays in the acceptance region."}`;
+        ? `To reject H₀ at α = ${alpha} (right-tailed), ${s} had to be at least ${cutoffValue}`
+        : `To reject H₀ at α = ${alpha} (left-tailed), ${s} had to be at most ${cutoffValue}`;
+  const cutoff = `${needed}. ${reject ? `It is, so ${s} lands in the rejection region.` : `It is not, so ${s} stays in the acceptance region.`}`;
 
   const oneIn =
     pValue >= 0.001 && pValue < 0.5

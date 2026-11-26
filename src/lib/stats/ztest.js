@@ -1,4 +1,5 @@
 // @ts-check
+import { decide, exact, firstFailure, TAIL_OPERATOR, v } from "./decision.js";
 import { criticalZ, pValue } from "./normal.js";
 import { fail, ok } from "./result.js";
 import {
@@ -13,230 +14,43 @@ import {
 
 /** @typedef {import('./normal.js').Tail} Tail */
 /** @typedef {'one-mean' | 'one-proportion' | 'two-means' | 'two-proportions'} ZTestType */
+/** @typedef {import('./decision.js').Step} Step */
 
 /**
- * Substitution token: literal text, a computed number (formatted to the chosen
- * decimals), or a user input shown exactly as entered (`exact: true`).
- * @typedef {string | { value: number, exact?: boolean }} Token
+ * A z-test result: the shared TestResult plus `z` (same value as `statistic`).
+ * @typedef {import('./decision.js').TestResult & { test: ZTestType, z: number }} ZTestResult
  */
 
-/**
- * @typedef {object} Step
- * @property {string} id
- * @property {string} title
- * @property {string} formula
- * @property {Token[]} substitution
- * @property {number | null} result
- * @property {string} explanation
- */
+export { TAIL_OPERATOR };
+
+/** @type {import('./decision.js').Distribution} */
+const Z_DIST = {
+  symbol: "z",
+  critical: criticalZ,
+  pValue,
+  criticalFormula: {
+    two: "z_(α/2) = Φ⁻¹(1 − α/2)",
+    right: "z_α = Φ⁻¹(1 − α)",
+    left: "−z_α = Φ⁻¹(α)",
+  },
+  criticalPrefix: [],
+  probability: "P(Z ≥ ",
+  df: null,
+};
 
 /**
- * @typedef {object} ZTestResult
- * @property {ZTestType} test
- * @property {Tail} tail
- * @property {number} alpha
- * @property {string} parameter      Symbol of the parameter tested, e.g. "μ".
- * @property {number} nullValue      Value of the parameter under H₀.
- * @property {{ null: string, alternative: string }} hypotheses
- * @property {number} estimate       Point estimate (x̄, p̂, x̄₁ − x̄₂, p̂₁ − p̂₂).
- * @property {number} standardError
- * @property {number} z
- * @property {{ lower: number | null, upper: number | null }} critical
- * @property {number} pValue
- * @property {boolean} reject        Decision by the critical-value rule.
- * @property {boolean} rejectByPValue Decision by the p-value rule (p ≤ α).
- * @property {string} conclusion
- * @property {Record<string, number>} details  Intermediate values (p̂, pooled p̄, …).
- * @property {Step[]} steps
- * @property {string[]} warnings
- */
-
-export const TAIL_OPERATOR = /** @type {const} */ ({ two: "≠", right: ">", left: "<" });
-
-/** @param {number} value @returns {{ value: number }} */
-const v = (value) => ({ value });
-/** @param {number} value @returns {{ value: number, exact: true }} */
-const exact = (value) => ({ value, exact: true });
-
-/**
- * @param {number} z
- * @param {Tail} tail
- * @param {{ lower: number | null, upper: number | null }} critical
- */
-function inRejectionRegion(z, tail, critical) {
-  if (tail === "two")
-    return (
-      z <= /** @type {number} */ (critical.lower) || z >= /** @type {number} */ (critical.upper)
-    );
-  if (tail === "right") return z >= /** @type {number} */ (critical.upper);
-  return z <= /** @type {number} */ (critical.lower);
-}
-
-/**
- * Shared second half of every z-test: critical values, p-value, decision,
- * conclusion and the remaining solution steps.
- *
- * @param {object} spec
- * @param {ZTestType} spec.test
- * @param {Tail} spec.tail
- * @param {number} spec.alpha
- * @param {string} spec.parameter
- * @param {number} spec.nullValue
- * @param {number} spec.estimate
- * @param {number} spec.standardError
- * @param {Step[]} spec.setupSteps   Test-specific steps (estimate, standard error).
- * @param {Step} spec.zStep          Test-specific z computation step (result filled in here).
- * @param {Record<string, number>} spec.details
- * @param {string[]} spec.warnings
+ * Run the shared decision with the normal distribution and add the `z` alias.
+ * @param {Omit<Parameters<typeof decide>[0], 'dist' | 'statStep'> & { zStep: Step }} spec
  * @returns {import('./result.js').Result<ZTestResult>}
  */
-function decide(spec) {
-  const { test, tail, alpha, parameter, nullValue, estimate, standardError } = spec;
-  if (!(standardError > 0) || !Number.isFinite(standardError)) {
-    return fail(
-      "ZERO_STANDARD_ERROR",
-      "The standard error is 0, so z cannot be computed. This happens when every observation is a success or every observation is a failure.",
-    );
-  }
-  const z = (estimate - nullValue) / standardError;
-  if (!Number.isFinite(z))
-    return fail("NON_FINITE", "The values are too large to compute a z statistic.");
-
-  const critical = criticalZ(alpha, tail);
-  const p = pValue(z, tail);
-  const reject = inRejectionRegion(z, tail, critical);
-  const operator = TAIL_OPERATOR[tail];
-  const nullText = `${parameter} = ${nullValue}`;
-  const altText = `${parameter} ${operator} ${nullValue}`;
-  const conclusion = reject
-    ? `Reject H₀. At α = ${alpha}, there is sufficient evidence to conclude that ${altText}.`
-    : `Fail to reject H₀. At α = ${alpha}, there is not enough evidence to conclude that ${altText}.`;
-
-  const zc = /** @type {number} */ (tail === "left" ? critical.lower : critical.upper);
-  const criticalStep = {
-    two: {
-      formula: "z_(α/2) = Φ⁻¹(1 − α/2)",
-      substitution: [
-        "α = ",
-        exact(alpha),
-        ", α/2 = ",
-        v(alpha / 2),
-        " → critical values z = ±",
-        v(zc),
-      ],
-      explanation: `In a two-tailed test, α is split equally between both tails (${alpha / 2} in each), so H₀ is rejected when z falls below −z_(α/2) or above +z_(α/2).`,
-    },
-    right: {
-      formula: "z_α = Φ⁻¹(1 − α)",
-      substitution: ["α = ", exact(alpha), " → critical value z = ", v(zc)],
-      explanation:
-        "In a right-tailed test, all of α sits in the upper tail, so H₀ is rejected when z is at or above the critical value.",
-    },
-    left: {
-      formula: "−z_α = Φ⁻¹(α)",
-      substitution: ["α = ", exact(alpha), " → critical value z = ", v(zc)],
-      explanation:
-        "In a left-tailed test, all of α sits in the lower tail, so H₀ is rejected when z is at or below the critical value.",
-    },
-  }[tail];
-
-  const pStep = {
-    two: {
-      formula: "p = 2 · P(Z ≥ |z|)",
-      substitution: ["p = 2 · P(Z ≥ ", v(Math.abs(z)), ") = ", v(p)],
-    },
-    right: { formula: "p = P(Z ≥ z)", substitution: ["p = P(Z ≥ ", v(z), ") = ", v(p)] },
-    left: { formula: "p = P(Z ≤ z)", substitution: ["p = P(Z ≤ ", v(z), ") = ", v(p)] },
-  }[tail];
-
-  const decisionStep = {
-    two: {
-      formula: "Reject H₀ if |z| ≥ z_(α/2)",
-      substitution: ["|z| = ", v(Math.abs(z)), reject ? " ≥ " : " < ", v(zc)],
-    },
-    right: {
-      formula: "Reject H₀ if z ≥ z_α",
-      substitution: ["z = ", v(z), reject ? " ≥ " : " < ", v(zc)],
-    },
-    left: {
-      formula: "Reject H₀ if z ≤ −z_α",
-      substitution: ["z = ", v(z), reject ? " ≤ " : " > ", v(zc)],
-    },
-  }[tail];
-
-  /** @type {Step[]} */
-  const steps = [
-    {
-      id: "hypotheses",
-      title: "State the hypotheses",
-      formula: `H₀: ${nullText}    Hₐ: ${altText}`,
-      substitution: [
-        `H₀: ${parameter} = `,
-        exact(nullValue),
-        `    Hₐ: ${parameter} ${operator} `,
-        exact(nullValue),
-      ],
-      result: null,
-      explanation: `H₀ is the claim of no difference. Hₐ uses "${operator}", so this is a ${tail === "two" ? "two" : tail}-tailed test.`,
-    },
-    {
-      id: "critical",
-      title: "Level of significance and critical value",
-      formula: criticalStep.formula,
-      substitution: criticalStep.substitution,
-      result: zc,
-      explanation: criticalStep.explanation,
-    },
-    ...spec.setupSteps,
-    { ...spec.zStep, result: z },
-    {
-      id: "p-value",
-      title: "p-value",
-      formula: pStep.formula,
-      substitution: pStep.substitution,
-      result: p,
-      explanation:
-        "The p-value is the probability of getting a z at least this extreme if H₀ were true. Smaller p-values mean stronger evidence against H₀.",
-    },
-    {
-      id: "decision",
-      title: "Decision",
-      formula: decisionStep.formula,
-      substitution: [
-        ...decisionStep.substitution,
-        reject ? " → Reject H₀" : " → Fail to reject H₀",
-      ],
-      result: null,
-      explanation: `Cross-check with the p-value: p ${p <= alpha ? "≤" : ">"} α (${alpha}), which leads to the same decision.`,
-    },
-  ];
-
+function decideZ({ zStep, ...spec }) {
+  const outcome = decide({ ...spec, dist: Z_DIST, statStep: zStep });
+  if (!outcome.ok) return outcome;
   return ok({
-    test,
-    tail,
-    alpha,
-    parameter,
-    nullValue,
-    hypotheses: { null: nullText, alternative: altText },
-    estimate,
-    standardError,
-    z,
-    critical,
-    pValue: p,
-    reject,
-    rejectByPValue: p <= alpha,
-    conclusion,
-    details: spec.details,
-    steps,
-    warnings: spec.warnings,
+    ...outcome.value,
+    test: /** @type {ZTestType} */ (spec.test),
+    z: outcome.value.statistic,
   });
-}
-
-/**
- * @param {Array<import('./validation.js').Failure | null>} checks
- */
-function firstFailure(checks) {
-  return checks.find((check) => check !== null) ?? null;
 }
 
 /**
@@ -260,7 +74,7 @@ export function oneMeanZTest({ sampleMean, mu0, sigma, n, alpha, tail }) {
   const sqrtN = Math.sqrt(n);
   const standardError = sigma / sqrtN;
   const difference = sampleMean - mu0;
-  return decide({
+  return decideZ({
     test: "one-mean",
     tail,
     alpha,
@@ -385,7 +199,7 @@ export function oneProportionZTest({ successes, sampleProportion, n, p0, alpha, 
     explanation: "Uses p₀ (not p̂) because the test assumes H₀ is true.",
   });
 
-  return decide({
+  return decideZ({
     test: "one-proportion",
     tail,
     alpha,
@@ -448,7 +262,7 @@ export function twoMeansZTest({ mean1, sigma1, n1, mean2, sigma2, n2, delta0 = 0
   const estimate = mean1 - mean2;
   const difference = estimate - delta0;
 
-  return decide({
+  return decideZ({
     test: "two-means",
     tail,
     alpha,
@@ -626,7 +440,7 @@ export function twoProportionsZTest({ x1, n1, x2, n2, p1, p2, alpha, tail }) {
     },
   );
 
-  return decide({
+  return decideZ({
     test: "two-proportions",
     tail,
     alpha,

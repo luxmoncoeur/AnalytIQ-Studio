@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, expect, it } from "vitest";
-import { parseNumber, parsePairs } from "../parse.js";
+import { parseNumber, parsePairs, parseSamples } from "../parse.js";
 
 describe("parseNumber", () => {
   it.each([
@@ -132,5 +132,46 @@ describe("parsePairs", () => {
     const result = parsePairs(text);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toMatch(message);
+  });
+});
+
+describe("parseSamples", () => {
+  it("reads ragged columns and skips empty cells", () => {
+    const r = parseSamples("12,15\n14,\n13,16\n,17", 2);
+    expect(r).toEqual({
+      ok: true,
+      value: {
+        samples: [
+          [12, 14, 13],
+          [15, 16, 17],
+        ],
+        header: null,
+      },
+    });
+  });
+
+  it("detects a header and ignores extra columns", () => {
+    const r = parseSamples("Before\tAfter\tNote\n1\t2\tx\n3\t4\ty", 2);
+    expect(r.ok && r.value).toEqual({
+      samples: [
+        [1, 3],
+        [2, 4],
+      ],
+      header: ["Before", "After"],
+    });
+  });
+
+  it("accepts one sample typed on a single line", () => {
+    const r = parseSamples("12 14 15.5 13", 1);
+    expect(r.ok && r.value.samples).toEqual([[12, 14, 15.5, 13]]);
+  });
+
+  it("explains bad input", () => {
+    expect(parseSamples("  \n ", 1)).toMatchObject({ ok: false });
+    const nan = parseSamples("1;2\n3;abc", 2);
+    expect(!nan.ok && nan.error).toMatchObject({ line: 2 });
+    expect(!nan.ok && nan.error.message).toMatch(/"abc" is not a valid number/);
+    const onlyHeader = parseSamples("A,B", 2);
+    expect(!onlyHeader.ok && onlyHeader.error.message).toMatch(/Only a header/);
   });
 });

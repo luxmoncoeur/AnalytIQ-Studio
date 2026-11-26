@@ -21,6 +21,24 @@ test.describe("Printable report", () => {
     await expect(report).toBeVisible();
   });
 
+  test("t-test report shows df, the CI, the t curve and the solution", async ({ page }) => {
+    await page.goto("/t-test");
+    await page.getByRole("button", { name: "Load example" }).click();
+    await page.getByRole("button", { name: "Print / PDF" }).click();
+
+    const report = page.locator("[data-print-report]");
+    await expect(report.getByRole("heading", { name: "One sample t-test" })).toBeVisible();
+    await expect(report.getByText("μ = 12", { exact: true })).toBeVisible();
+    await expect(report.getByText("3.0000", { exact: true }).first()).toBeVisible();
+    await expect(report.getByText(/95% confidence interval for μ/)).toBeVisible();
+    await expect(report.getByRole("img", { name: /t distribution curve/ })).toBeVisible();
+    await expect(report.getByRole("heading", { name: "Step-by-step solution" })).toBeVisible();
+
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator("[data-slot=sidebar]").first()).toBeHidden();
+    await expect(report).toBeVisible();
+  });
+
   test("regression report includes the table and the solution", async ({ page }) => {
     await page.goto("/regression?example=study-hours");
     await expect(page.getByText("Ŷ = 46.5000 + 7.5000X").first()).toBeAttached();

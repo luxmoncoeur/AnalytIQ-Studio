@@ -22,7 +22,7 @@ export function LandingHeader() {
           {[
             ["Regression", "/regression"],
             ["Hypothesis testing", "/hypothesis"],
-            ["Formulas & Z-table", "/learn"],
+            ["Formulas & tables", "/learn"],
           ].map(([label, href]) => (
             <Link
               key={href}

@@ -96,3 +96,57 @@ export function checkTail(tail) {
     ? null
     : fail("INVALID_TAIL", "Choose a left-tailed, right-tailed, or two-tailed test.", "tail");
 }
+
+/**
+ * A list of raw observations: at least `min` values, all finite, at most `max`.
+ * @param {unknown} values
+ * @param {number} min
+ * @param {number} max
+ * @param {string} field
+ * @param {string} label  e.g. "Sample 1"
+ * @returns {Failure | null}
+ */
+export function checkDataList(values, min, max, field, label) {
+  if (!Array.isArray(values) || values.length === 0)
+    return fail("EMPTY", `${label} has no values. Enter at least ${min}.`, field);
+  if (values.length < min)
+    return fail(
+      "N_TOO_SMALL",
+      `${label} needs at least ${min} values (it has ${values.length}).`,
+      field,
+    );
+  if (values.length > max)
+    return fail(
+      "TOO_MANY_POINTS",
+      `${label} has more than ${max.toLocaleString("en-US")} values.`,
+      field,
+    );
+  const bad = values.findIndex((value) => !isFiniteNumber(value));
+  return bad === -1
+    ? null
+    : fail("NON_FINITE", `${label}: value ${bad + 1} is not a valid number.`, field);
+}
+
+/**
+ * Sample size for a t-test: a whole number of at least `min` (2 for one sample).
+ * @param {unknown} value
+ * @param {number} min
+ * @param {string} field
+ * @param {string} label
+ * @returns {Failure | null}
+ */
+export function checkMinSampleSize(value, min, field, label) {
+  if (!Number.isSafeInteger(value) || /** @type {number} */ (value) < 1)
+    return fail(
+      "N_NOT_POSITIVE_INTEGER",
+      `${label} must be a whole number of at least ${min}.`,
+      field,
+    );
+  return /** @type {number} */ (value) >= min
+    ? null
+    : fail(
+        "N_TOO_SMALL",
+        `${label} must be at least ${min}; with fewer values the standard deviation is undefined.`,
+        field,
+      );
+}
